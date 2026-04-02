@@ -5,38 +5,63 @@ from urllib.parse import urlparse, parse_qs
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        # URL se parameters nikalna (uid aur region)
         query = parse_qs(urlparse(self.path).query)
         uid = query.get('uid', [None])[0]
-        # Agar region nahi diya to default 'ind' (India) rakhega
-        region = query.get('region', ['ind'])[0]
 
         if not uid:
             self.send_response(400)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps({"error": "UID missing! Please use ?uid=NUMBER&region=ind"}).encode())
+            self.wfile.write(json.dumps({"success": False, "error": "UID missing"}).encode())
             return
 
-        # Aapka bataya hua API Endpoint
-        target_url = f"https://info-ob49.vercel.app/api/account/?uid={uid}&region={region}"
+        # Direct Garena Login Endpoint (Official Source)
+        # Ye BD aur IND dono regions ke liye kaam karta hai
+        url = "https://shop2game.com/api/auth/player_id_login"
+        
+        payload = {
+            "app_id": 100067,
+            "login_id": uid
+        }
+
+        # Real Browser Headers (Taaki Garena block na kare)
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            "Referer": "https://shop2game.com/app/100067/login",
+            "X-Requested-With": "XMLHttpRequest"
+        }
 
         try:
-            # External API se data fetch karna
-            response = requests.get(target_url, timeout=10)
-            data = response.json()
-
-            # Browser ko response bhejna
+            # Garena server ko request bhejna
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
+            
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*') # Sab jagah chalega
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
 
-            # Jo bhi data milega wahi aapki site par dikhega
-            self.wfile.write(json.dumps(data).encode())
+            if response.status_code == 200:
+                data = response.json()
+                if "nickname" in data:
+                    # Successfully found nickname
+                    result = {
+                        "success": True,
+                        "data": {
+                            "uid": uid,
+                            "nickname": data["nickname"],
+                            "region": "International/BD/IND"
+                        }
+                    }
+                else:
+                    result = {"success": False, "message": "Player Not Found in Garena Database"}
+            else:
+                result = {"success": False, "message": f"Garena Server Error ({response.status_code})"}
+
+            self.wfile.write(json.dumps(result).encode())
 
         except Exception as e:
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode())
+            self.wfile.write(json.dumps({"success": False, "error": "Connection Failed", "details": str(e)}).encode())
