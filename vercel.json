@@ -1,5 +1,6 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "/main.py" }
+    { "source": "/api/send-otp", "destination": "/api/main.py" },
+    { "source": "/api/confirm", "destination": "/api/main.py" }
   ]
 }
